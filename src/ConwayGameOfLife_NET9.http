@@ -1,0 +1,6 @@
+@ConwayGameOfLife_NET9_HostAddress = http://localhost:5041
+
+GET {{ConwayGameOfLife_NET9_HostAddress}}/game/
+Accept: application/json
+
+###
