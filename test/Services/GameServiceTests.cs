@@ -1,21 +1,24 @@
 using ConwayGameOfLife_NET9.Models;
 using ConwayGameOfLife_NET9.Repositories;
 using ConwayGameOfLife_NET9.Services;
+using ConwayGameOfLife_NET9.Tests;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 
-namespace ConwayGameOfLife_NET9.Tests.Services;
+namespace UnitTests.Services;
 
 public class GameServiceTests
 {
     private readonly Mock<IBoardRepository> _mockRepository;
-    private readonly GameService _gameService;
+    private readonly IGameOfLifeRules _mockRules;
+    private readonly IGameService _gameService;
 
     public GameServiceTests()
     {
         _mockRepository = new Mock<IBoardRepository>();
-        _gameService = new GameService(_mockRepository.Object, new Mock<ILogger<GameService>>().Object);
+        _mockRules = new GameOfLifeRules();
+        _gameService = new GameService(_mockRepository.Object, new Mock<ILogger<GameService>>().Object, _mockRules);
     }
 
     [Fact]
@@ -76,7 +79,7 @@ public class GameServiceTests
         _mockRepository.Verify(repo => repo.DeleteBoardAsync(boardId), Times.Once);
     }
 
-   
+
 
     [Fact]
     public async Task DeleteBoardAsync_WithNullId_PassesNullToRepository()
@@ -231,8 +234,10 @@ public class GameServiceTests
         int generations = 2;
 
         // Create a blinker pattern (vertical)
-        var initialBoard = new Board(5, 5);
-        initialBoard.Id = boardId;
+        var initialBoard = new Board(5, 5)
+        {
+            Id = boardId
+        };
         initialBoard.Cells[2, 1].State = CellState.Alive;
         initialBoard.Cells[2, 2].State = CellState.Alive;
         initialBoard.Cells[2, 3].State = CellState.Alive;
@@ -265,8 +270,10 @@ public class GameServiceTests
     {
 
         // Create a blinker pattern (vertical)
-        var initialBoard = new Board(5, 5);
-        initialBoard.Id = boardId;
+        var initialBoard = new Board(5, 5)
+        {
+            Id = boardId
+        };
         initialBoard.Cells[2, 1].State = CellState.Alive;
         initialBoard.Cells[2, 2].State = CellState.Alive;
         initialBoard.Cells[2, 3].State = CellState.Alive;

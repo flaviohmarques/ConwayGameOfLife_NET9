@@ -1,5 +1,6 @@
 using Aikido.Zen.DotNetCore;
 using ConwayGameOfLife_NET9.Common;
+using ConwayGameOfLife_NET9.Configurations;
 using ConwayGameOfLife_NET9.Repositories;
 using ConwayGameOfLife_NET9.Services;
 using HealthChecks.UI.Client;
@@ -20,11 +21,11 @@ if (builder.Environment.IsProduction())
     builder.Services.AddZenFirewall();
 }
 
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
 builder.Services.AddSingleton<IBoardRepository, BoardRepository>();
-builder.Services.AddScoped<IGameService, GameService>();
+builder.Services.AddSingleton<IGameOfLifeRules, GameOfLifeRules>();
+builder.Services.AddSingleton<IGameService, GameService>();
 
 builder.Services.AddResponseCompression(options =>
 {
@@ -41,6 +42,13 @@ builder.Services.Configure<GzipCompressionProviderOptions>(options =>
 );
 
 builder.Services.AddExceptionHandler<ExceptionHandler>();
+
+// Add serilog
+if (builder.Environment.EnvironmentName != "Testing")
+{
+    builder.Host.UseLoggingSetup(builder.Configuration);
+    builder.AddOpenTelemetrySetup();
+}
 
 var app = builder.Build();
 
