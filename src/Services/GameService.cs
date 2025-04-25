@@ -13,70 +13,115 @@ public interface IGameService
     Task<Board> GetFinalStateAsync(string id, int maxGenerations = 1000);
 }
 
-public class GameService : IGameService
+public class GameService(IBoardRepository boardRepository, ILogger<GameService> logger, IGameOfLifeRules gameOfLifeRules) : IGameService
 {
-    private readonly IBoardRepository _boardRepository;
-    private readonly ILogger<GameService> _logger;
-
-    public GameService(IBoardRepository boardRepository, ILogger<GameService> logger)
-    {
-        _boardRepository = boardRepository;
-        _logger = logger;
-    }
-
+    /// <summary>
+    /// Creates a new Game of Life board from the provided initial state.
+    /// </summary>
+    /// <param name="initialState">A 2D array representing the initial state of the board, where 1 is alive and 0 is dead.</param>
+    /// <returns>A string representing the unique identifier of the newly created board.</returns>
+    /// <exception cref="Exception">Rethrows any exceptions that occur during board creation.</exception>
+    /// <remarks>
+    /// This method generates a new board with a unique ID, initializes it with the provided state,
+    /// and persists it to the repository. The board's generation count starts at 0.
+    /// </remarks>
     public async Task<string> CreateBoardAsync(int[][] initialState)
     {
         try
         {
             Board board = await Board.FromBinaryArrayAsync(initialState);
-            await _boardRepository.SaveBoardAsync(board);
+            await boardRepository.SaveBoardAsync(board);
 
-            _logger.LogInformation("Created new board with ID: {BoardId}", board.Id);
+            logger.LogInformation("Created new board with ID: {BoardId}", board.Id);
             return board.Id;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating board");
+            logger.LogError(ex, "Error creating board");
             throw;
         }
     }
 
+    /// <summary>
+    /// Retrieves a board by its unique identifier.
+    /// </summary>
+    /// <param name="id">The unique identifier of the board to retrieve.</param>
+    /// <returns>The requested Board object.</returns>
+    /// <exception cref="KeyNotFoundException">Thrown when a board with the specified ID is not found.</exception>
+    /// <remarks>
+    /// This method attempts to retrieve a board from the repository and throws an exception
+    /// if the board doesn't exist, rather than returning null.
+    /// </remarks>
     public async Task<Board> GetBoardAsync(string id)
     {
-        var board = await _boardRepository.GetBoardAsync(id);
+        var board = await boardRepository.GetBoardAsync(id);
 
         if (board == null)
         {
-            _logger.LogWarning("Board with ID {Id} not found", id);
+            logger.LogWarning("Board with ID {Id} not found", id);
             throw new KeyNotFoundException($"Board with ID {id} not found");
         }
 
         return board;
     }
 
+    /// <summary>
+    /// Deletes a board by its unique identifier.
+    /// </summary>
+    /// <param name="id">The unique identifier of the board to delete.</param>
+    /// <returns>A confirmation message indicating successful deletion.</returns>
+    /// <exception cref="KeyNotFoundException">Thrown when a board with the specified ID is not found.</exception>
+    /// <remarks>
+    /// This method attempts to delete a board from the repository and throws an exception
+    /// if the board doesn't exist or the deletion operation fails.
+    /// </remarks>
     public async Task<string> DeleteBoardAsync(string id)
     {
-        if (await _boardRepository.DeleteBoardAsync(id))
+        if (await boardRepository.DeleteBoardAsync(id))
             return $"Successfully deleted board {id}";
         else
         {
-            _logger.LogWarning("Board with ID {Id} not found", id);
+            logger.LogWarning("Board with ID {Id} not found", id);
             throw new KeyNotFoundException($"Board with ID {id} not found");
         }
     }
 
+    /// <summary>
+    /// Advances a board by one generation according to Conway's Game of Life rules.
+    /// </summary>
+    /// <param name="id">The unique identifier of the board to advance.</param>
+    /// <returns>The board in its next state after applying the rules.</returns>
+    /// <exception cref="KeyNotFoundException">Thrown when a board with the specified ID is not found.</exception>
+    /// <remarks>
+    /// This method retrieves the current state of the board, computes the next generation,
+    /// persists the new state to the repository, and returns the updated board.
+    /// The generation count is incremented by one.
+    /// </remarks>
     public async Task<Board> GetNextStateAsync(string id)
     {
         var board = await GetBoardAsync(id);
-        var nextBoard = await ComputeNextGenerationAsync(board);
+        var nextBoard = await gameOfLifeRules.ComputeNextGenerationAsync(board);
 
         // Save the new state
-        await _boardRepository.SaveBoardAsync(nextBoard);
+        await boardRepository.SaveBoardAsync(nextBoard);
 
-        _logger.LogInformation("Computed next state for board {Id}, generation {NextBoardGenerationCount}", id, nextBoard.GenerationCount);
+        logger.LogInformation("Computed next state for board {Id}, generation {NextBoardGenerationCount}", id, nextBoard.GenerationCount);
         return nextBoard;
     }
 
+    /// <summary>
+    /// Advances a board by a specified number of generations.
+    /// </summary>
+    /// <param name="id">The unique identifier of the board to advance.</param>
+    /// <param name="generations">The number of generations to advance the board.</param>
+    /// <returns>The board after the specified number of generations have been applied.</returns>
+    /// <exception cref="ArgumentException">Thrown when the number of generations is negative.</exception>
+    /// <exception cref="KeyNotFoundException">Thrown when a board with the specified ID is not found.</exception>
+    /// <remarks>
+    /// This method validates that the generation count is non-negative, retrieves the current state of the board,
+    /// iteratively applies Conway's Game of Life rules for the specified number of generations,
+    /// persists the final state to the repository, and returns the updated board.
+    /// </remarks>
     public async Task<Board> GetStateAfterGenerationsAsync(string id, int generations)
     {
         if (generations < 0)
@@ -87,153 +132,62 @@ public class GameService : IGameService
         var board = await GetBoardAsync(id);
         var resultBoard = await board.CloneAsync();
 
-        for (int i = 0; i < generations; i++)
-        {
-            resultBoard = await ComputeNextGenerationAsync(resultBoard);
-        }
+        resultBoard = await gameOfLifeRules.ComputeMultipleGenerationsAsync(resultBoard, generations);
 
         // Save the final state
-        await _boardRepository.SaveBoardAsync(resultBoard);
+        await boardRepository.SaveBoardAsync(resultBoard);
 
-        _logger.LogInformation($"Computed state after {generations} generations for board {id}");
+        logger.LogInformation($"Computed state after {generations} generations for board {id}");
         return resultBoard;
     }
 
+    /// <summary>
+    /// Attempts to find the final stable state or cycle of a board.
+    /// </summary>
+    /// <param name="id">The unique identifier of the board to analyze.</param>
+    /// <param name="maxGenerations">The maximum number of generations to compute before timing out (default: 1000).</param>
+    /// <returns>The board in its final stable state or at the start of a detected cycle.</returns>
+    /// <exception cref="KeyNotFoundException">Thrown when a board with the specified ID is not found.</exception>
+    /// <exception cref="TimeoutException">Thrown when a stable state or cycle is not found within the maximum number of generations.</exception>
+    /// <remarks>
+    /// This method tries to detect when a board:
+    /// 1. Enters a repeating cycle of states (pattern detected using state hashing)
+    /// 2. Reaches an empty state (all cells dead)
+    /// 3. Exceeds the maximum generation count without finding stability
+    /// 
+    /// When a cycle is detected, the generation count is set to the first occurrence of that state.
+    /// The final state is persisted to the repository before returning.
+    /// </remarks>
     public async Task<Board> GetFinalStateAsync(string id, int maxGenerations = 1000)
     {
         var board = await GetBoardAsync(id);
-        var currentBoard = await board.CloneAsync();
 
-        // Dictionary to store previous states for cycle detection
-        var previousStates = new Dictionary<string, int>();
-
-        for (int i = 0; i < maxGenerations; i++)
+        try
         {
-            // Store the current state for cycle detection
-            string serializedState = SerializeBoardState(currentBoard);
+            var (resultBoard, isCycleDetected, cycleStartGeneration) =
+                await gameOfLifeRules.ComputeFinalStateAsync(board, maxGenerations);
 
-            if (previousStates.TryGetValue(serializedState, out int previousGeneration))
+            if (isCycleDetected && cycleStartGeneration.HasValue)
             {
-                // We've found a cycle
-                _logger.LogInformation("Board {Id} stabilized into a cycle at generation {CurrentBoardGenerationCount}", id, currentBoard.GenerationCount);
-                currentBoard.GenerationCount = previousGeneration;
-                await _boardRepository.SaveBoardAsync(currentBoard);
-                return currentBoard;
+                logger.LogInformation("Board {Id} stabilized into a cycle at generation {CurrentBoardGenerationCount}",
+                    id, resultBoard.GenerationCount);
+                resultBoard.GenerationCount = cycleStartGeneration.Value;
+            }
+            else
+            {
+                logger.LogInformation("Board {Id} reached empty state at generation {CurrentBoardGenerationCount}",
+                    id, resultBoard.GenerationCount);
             }
 
-            previousStates[serializedState] = currentBoard.GenerationCount;
-
-            // If board is empty (all cells dead), we've reached a stable state
-            if (IsEmpty(currentBoard))
-            {
-                _logger.LogInformation("Board {Id} reached empty state at generation {CurrentBoardGenerationCount}", id, currentBoard.GenerationCount);
-                await _boardRepository.SaveBoardAsync(currentBoard);
-                return currentBoard;
-            }
-
-            // Compute next generation
-            currentBoard = await ComputeNextGenerationAsync(currentBoard);
+            await boardRepository.SaveBoardAsync(resultBoard);
+            return resultBoard;
         }
-
-        _logger.LogWarning($"Board {id} did not reach conclusion after {maxGenerations} generations");
-        throw new TimeoutException($"Board did not reach conclusion after {maxGenerations} generations");
+        catch (TimeoutException ex)
+        {
+            logger.LogWarning("Board {Id} did not reach conclusion after {MaxGenerations} generations",
+                id, maxGenerations);
+            throw;
+        }
     }
 
-    private async Task<Board> ComputeNextGenerationAsync(Board currentBoard)
-    {
-        Board nextBoard = await currentBoard.CloneAsync();
-        nextBoard.GenerationCount++;
-
-        for (int x = 0; x < currentBoard.Width; x++)
-        {
-            for (int y = 0; y < currentBoard.Height; y++)
-            {
-                int liveNeighbors = CountLiveNeighbors(currentBoard, x, y);
-                Cell currentCell = currentBoard.Cells[x, y];
-
-                // Apply Conway's Game of Life rules
-                if (currentCell.IsAlive)
-                {
-                    // Live cell with fewer than 2 live neighbors dies (underpopulation)
-                    // Live cell with more than 3 live neighbors dies (overpopulation)
-                    if (liveNeighbors < 2 || liveNeighbors > 3)
-                    {
-                        nextBoard.Cells[x, y].State = CellState.Dead;
-                    }
-                    // Otherwise, the live cell stays alive
-                }
-                else
-                {
-                    // Dead cell with exactly 3 live neighbors becomes alive (reproduction)
-                    if (liveNeighbors == 3)
-                    {
-                        nextBoard.Cells[x, y].State = CellState.Alive;
-                    }
-                    // Otherwise, the dead cell stays dead
-                }
-            }
-        }
-
-        return nextBoard;
-    }
-
-    private int CountLiveNeighbors(Board board, int x, int y)
-    {
-        int count = 0;
-
-        for (int dx = -1; dx <= 1; dx++)
-        {
-            for (int dy = -1; dy <= 1; dy++)
-            {
-                // Skip the cell itself
-                if (dx == 0 && dy == 0)
-                    continue;
-
-                int nx = x + dx;
-                int ny = y + dy;
-
-                // Check if neighbor is within bounds
-                if (nx >= 0 && nx < board.Width && ny >= 0 && ny < board.Height)
-                {
-                    if (board.Cells[nx, ny].IsAlive)
-                        count++;
-                }
-            }
-        }
-
-        return count;
-    }
-
-    private bool IsEmpty(Board board)
-    {
-        for (int x = 0; x < board.Width; x++)
-        {
-            for (int y = 0; y < board.Height; y++)
-            {
-                if (board.Cells[x, y].IsAlive)
-                {
-                    return false;
-                }
-            }
-        }
-
-        return true;
-    }
-
-    private string SerializeBoardState(Board board)
-    {
-        // Simple state serialization for cycle detection
-        // Only serializes the cell states, not the board ID or generation count
-        System.Text.StringBuilder sb = new System.Text.StringBuilder();
-
-        for (int y = 0; y < board.Height; y++)
-        {
-            for (int x = 0; x < board.Width; x++)
-            {
-                sb.Append(board.Cells[x, y].IsAlive ? "1" : "0");
-            }
-        }
-
-        return sb.ToString();
-    }
 }

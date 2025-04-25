@@ -10,6 +10,8 @@
         "tags": [
           "Game"
         ],
+        "summary": "Creates board",
+        "description": "Creates a new Game of Life board from the provided initial state.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -79,6 +81,8 @@
         "tags": [
           "Game"
         ],
+        "summary": "Get board",
+        "description": "Get a board from the provided id.",
         "parameters": [
           {
             "name": "id",
@@ -136,6 +140,8 @@
         "tags": [
           "Game"
         ],
+        "summary": "Delete board",
+        "description": "Delete a board from the provided id.",
         "parameters": [
           {
             "name": "id",
@@ -195,6 +201,8 @@
         "tags": [
           "Game"
         ],
+        "summary": "Get board next state",
+        "description": "Request the next state of a board from the provided id.",
         "parameters": [
           {
             "name": "id",
@@ -254,6 +262,8 @@
         "tags": [
           "Game"
         ],
+        "summary": "Get board state",
+        "description": "Request the board state after a number of generations from the provided id.",
         "parameters": [
           {
             "name": "id",
@@ -342,6 +352,8 @@
         "tags": [
           "Game"
         ],
+        "summary": "Get board final state",
+        "description": "Request the board final state after a large number of generations from the provided id.",
         "parameters": [
           {
             "name": "id",
@@ -429,6 +441,9 @@
   "components": {
     "schemas": {
       "BoardCreatedResponse": {
+        "required": [
+          "id"
+        ],
         "type": "object",
         "properties": {
           "id": {

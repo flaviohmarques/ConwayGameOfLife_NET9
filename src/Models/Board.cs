@@ -1,6 +1,17 @@
 ﻿using System.Text;
 namespace ConwayGameOfLife_NET9.Models;
-public class Board
+
+public interface IBoard
+{
+    string Id { get; }
+    int Width { get; }
+    int Height { get; }
+    int GenerationCount { get; }
+    DateTime CreatedAt { get; }
+    Task<int[][]> ToBinaryArrayAsync(); 
+    
+}
+public class Board : IBoard
 {
     public string Id { get; set; }
     public Cell[,] Cells { get; private set; }

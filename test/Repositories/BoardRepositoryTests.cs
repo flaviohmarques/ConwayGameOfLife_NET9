@@ -1,16 +1,14 @@
 ﻿using ConwayGameOfLife_NET9.Models;
 using ConwayGameOfLife_NET9.Repositories;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Moq;
 
-namespace ConwayGameOfLife_NET9.Tests.Repositories;
+namespace UnitTests.Repositories;
 
 public class BoardRepositoryTests : IDisposable
 {
     private readonly string _testDataDirectory;
-    private readonly Mock<ILogger<BoardRepository>> _mockLogger;
-    private readonly BoardRepository _repository;
+    private readonly IBoardRepository _repository;
 
     public BoardRepositoryTests()
     {
@@ -19,7 +17,7 @@ public class BoardRepositoryTests : IDisposable
         Directory.CreateDirectory(_testDataDirectory);
 
         // Create mock logger
-        _mockLogger = new Mock<ILogger<BoardRepository>>();
+        var mockLogger = new Mock<ILogger<BoardRepository>>();
 
         // Create field to access private _dataDirectory field
         var repositoryType = typeof(BoardRepository);
@@ -27,7 +25,7 @@ public class BoardRepositoryTests : IDisposable
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
         // Create repository instance
-        _repository = new BoardRepository(_mockLogger.Object);
+        _repository = new BoardRepository(mockLogger.Object);
 
         // Set _dataDirectory to the test directory
         field.SetValue(_repository, _testDataDirectory);
