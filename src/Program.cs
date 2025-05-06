@@ -43,8 +43,8 @@ builder.Services.Configure<GzipCompressionProviderOptions>(options =>
 
 builder.Services.AddExceptionHandler<ExceptionHandler>();
 
-// Add serilog
-if (builder.Environment.EnvironmentName != "Testing")
+// Add serilog for production logging
+if (builder.Environment.IsProduction())
 {
     builder.Host.UseLoggingSetup(builder.Configuration);
     builder.AddOpenTelemetrySetup();
